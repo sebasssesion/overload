@@ -258,6 +258,18 @@
   }
   .day-template-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .day-template-head input { flex: 1; font-weight: 600; }
+  .day-collapse-toggle {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 32px; height: 32px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+  }
+  .day-collapse-toggle svg { width: 16px; height: 16px; transition: transform 0.15s ease; }
 
   .program-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -1062,9 +1074,18 @@
     editingProgram.dayTemplates.forEach(function(day, dIdx){
       var box = document.createElement('div');
       box.className = 'day-template-editor';
+      var collapsed = !!day._collapsed;
 
       var head = document.createElement('div');
       head.className = 'day-template-head';
+      var toggleBtn = document.createElement('button');
+      toggleBtn.className = 'day-collapse-toggle';
+      toggleBtn.setAttribute('aria-label', collapsed ? 'Expand day' : 'Collapse day');
+      toggleBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(' + (collapsed ? '-90deg' : '0deg') + ');"><path d="M6 9l6 6 6-6"/></svg>';
+      toggleBtn.addEventListener('click', function(){
+        day._collapsed = !collapsed;
+        renderDayTemplates();
+      });
       var nameInput = document.createElement('input');
       nameInput.type = 'text';
       nameInput.placeholder = 'Day name e.g. Push';
@@ -1082,9 +1103,20 @@
         renderDayTemplates();
         renderScheduleRows();
       });
+      head.appendChild(toggleBtn);
       head.appendChild(nameInput);
       head.appendChild(removeBtn);
       box.appendChild(head);
+
+      if (collapsed) {
+        var summary = document.createElement('div');
+        summary.className = 'row-sub';
+        summary.style.margin = '0';
+        summary.textContent = day.exercises.length + ' exercise' + (day.exercises.length===1?'':'s');
+        box.appendChild(summary);
+        wrap.appendChild(box);
+        return;
+      }
 
       var exList = document.createElement('div');
       day.exercises.forEach(function(ex, eIdx){
