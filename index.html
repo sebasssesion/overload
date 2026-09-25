@@ -243,11 +243,20 @@
   .exercise-editor-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .exercise-editor-head .row-title { font-size: 14px; }
   .set-range-list { margin-bottom: 2px; }
-  .set-range-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-  .set-range-label { font-size: 12px; font-weight: 600; color: var(--text-muted); width: 42px; flex-shrink: 0; }
-  .set-range-row input { width: 52px; flex: none; padding: 8px 4px; text-align: center; }
+  .set-range-row { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--surface); }
+  .set-range-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .set-range-label { font-size: 12px; font-weight: 600; color: var(--text-muted); width: 38px; flex-shrink: 0; }
+  .mode-pills { display: flex; gap: 4px; flex: 1; }
+  .mode-pill {
+    flex: 1; text-align: center; padding: 6px 4px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface-alt);
+    color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .mode-pill.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .set-range-inputs { display: flex; align-items: center; gap: 6px; }
+  .set-range-inputs input { width: 52px; flex: none; padding: 8px 4px; text-align: center; }
   .set-range-sep { color: var(--text-muted); font-size: 13px; }
-  .set-range-remove { background: none; border: none; color: var(--text-muted); font-size: 14px; cursor: pointer; margin-left: auto; padding: 4px 6px; }
+  .set-range-remove { background: none; border: none; color: var(--text-muted); font-size: 14px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
 
   .day-template-editor {
     border: 1px solid var(--border);
@@ -390,12 +399,6 @@
   }
   .set-aim { font-size: 9px; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
 
-  .set-range-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .set-range-sep { color: var(--text-muted); font-size: 13px; }
-  .set-range-remove {
-    margin-left: auto; background: none; border: none; color: var(--text-muted);
-    font-size: 15px; cursor: pointer; padding: 4px 6px;
-  }
   .set-row input { padding: 10px; font-size: 16px; text-align: center; }
   .log-btn {
     background: var(--text);
@@ -1130,7 +1133,7 @@
       addExBtn.style.marginTop = '4px';
       addExBtn.addEventListener('click', function(){
         day.exercises.push({ id: uid(), name: '', weightIncrement: 2.5, sets: [
-          { repMin: 8, repMax: 12 }, { repMin: 8, repMax: 12 }, { repMin: 8, repMax: 12 }
+          { repMin: 8, repMax: 12, mode: 'range' }, { repMin: 8, repMax: 12, mode: 'range' }, { repMin: 8, repMax: 12, mode: 'range' }
         ] });
         renderDayTemplates();
       });
@@ -1170,27 +1173,72 @@
     function renderSetRangeRows(){
       setListEl.innerHTML = '';
       ex.sets.forEach(function(cfg, sIdx){
+        if (!cfg.mode) cfg.mode = 'range';
         var row = document.createElement('div');
         row.className = 'set-range-row';
-        row.innerHTML =
-          '<span class="set-range-label">Set ' + (sIdx+1) + '</span>' +
-          '<input type="number" min="1" class="srMin" value="' + cfg.repMin + '">' +
-          '<span class="set-range-sep">\u2013</span>' +
-          '<input type="number" min="1" class="srMax" value="' + cfg.repMax + '">' +
-          '<span class="set-range-sep" style="margin-left:2px;">reps</span>' +
-          '<button class="set-range-remove" aria-label="Remove set">\u2715</button>';
-        row.querySelector('.srMin').addEventListener('input', function(e){
-          var v = parseInt(e.target.value, 10);
-          cfg.repMin = isNaN(v) ? 1 : v;
+
+        var top = document.createElement('div');
+        top.className = 'set-range-top';
+        var label = document.createElement('span');
+        label.className = 'set-range-label';
+        label.textContent = 'Set ' + (sIdx+1);
+        var pills = document.createElement('div');
+        pills.className = 'mode-pills';
+        [['range','Range'], ['straight','Straight'], ['amrap','AMRAP']].forEach(function(m){
+          var pill = document.createElement('button');
+          pill.className = 'mode-pill' + (cfg.mode === m[0] ? ' selected' : '');
+          pill.textContent = m[1];
+          pill.addEventListener('click', function(){
+            if (cfg.mode === m[0]) return;
+            if (m[0] === 'straight' && cfg.mode !== 'straight') cfg.repMax = cfg.repMin;
+            cfg.mode = m[0];
+            renderSetRangeRows();
+          });
+          pills.appendChild(pill);
         });
-        row.querySelector('.srMax').addEventListener('input', function(e){
-          var v = parseInt(e.target.value, 10);
-          cfg.repMax = isNaN(v) ? cfg.repMin : v;
-        });
-        row.querySelector('.set-range-remove').addEventListener('click', function(){
+        var removeBtn = document.createElement('button');
+        removeBtn.className = 'set-range-remove';
+        removeBtn.setAttribute('aria-label', 'Remove set');
+        removeBtn.textContent = '\u2715';
+        removeBtn.addEventListener('click', function(){
           ex.sets.splice(sIdx, 1);
           renderSetRangeRows();
         });
+        top.appendChild(label);
+        top.appendChild(pills);
+        top.appendChild(removeBtn);
+        row.appendChild(top);
+
+        var inputsRow = document.createElement('div');
+        inputsRow.className = 'set-range-inputs';
+        if (cfg.mode === 'range') {
+          inputsRow.innerHTML =
+            '<input type="number" min="1" class="srMin" value="' + cfg.repMin + '">' +
+            '<span class="set-range-sep">\u2013</span>' +
+            '<input type="number" min="1" class="srMax" value="' + cfg.repMax + '">' +
+            '<span class="set-range-sep">reps</span>';
+          inputsRow.querySelector('.srMin').addEventListener('input', function(e){
+            var v = parseInt(e.target.value, 10);
+            cfg.repMin = isNaN(v) ? 1 : v;
+          });
+          inputsRow.querySelector('.srMax').addEventListener('input', function(e){
+            var v = parseInt(e.target.value, 10);
+            cfg.repMax = isNaN(v) ? cfg.repMin : v;
+          });
+        } else if (cfg.mode === 'straight') {
+          inputsRow.innerHTML =
+            '<input type="number" min="1" class="srStraight" value="' + cfg.repMin + '">' +
+            '<span class="set-range-sep">reps</span>';
+          inputsRow.querySelector('.srStraight').addEventListener('input', function(e){
+            var v = parseInt(e.target.value, 10);
+            cfg.repMin = isNaN(v) ? 1 : v;
+            cfg.repMax = cfg.repMin;
+          });
+        } else {
+          inputsRow.innerHTML = '<span class="set-range-sep">As many reps as possible</span>';
+        }
+        row.appendChild(inputsRow);
+
         setListEl.appendChild(row);
       });
     }
@@ -1202,7 +1250,11 @@
     addSetBtn.textContent = '+ Add set';
     addSetBtn.addEventListener('click', function(){
       var last = ex.sets[ex.sets.length - 1];
-      ex.sets.push({ repMin: last ? last.repMin : 8, repMax: last ? last.repMax : 12 });
+      ex.sets.push({
+        repMin: last ? last.repMin : 8,
+        repMax: last ? last.repMax : 12,
+        mode: last ? last.mode : 'range'
+      });
       renderSetRangeRows();
     });
     box.appendChild(addSetBtn);
@@ -1304,13 +1356,22 @@
   }
 
   function getTargetForSet(ex, index){
-    var cfg = (ex.sets && (ex.sets[index] || ex.sets[ex.sets.length - 1])) || { repMin: 8, repMax: 12 };
+    var cfg = (ex.sets && (ex.sets[index] || ex.sets[ex.sets.length - 1])) || { repMin: 8, repMax: 12, mode: 'range' };
+    var mode = cfg.mode || 'range';
     var prog = state.progression[ex.id];
     var entry = Array.isArray(prog) ? prog[index] : null;
-    if (entry && entry.targetWeight !== null && entry.targetWeight !== undefined) {
-      return { targetWeight: entry.targetWeight, targetReps: entry.targetReps, repMin: cfg.repMin, repMax: cfg.repMax, isNew: false };
+    var hasHistory = entry && entry.targetWeight !== null && entry.targetWeight !== undefined;
+    if (mode === 'amrap') {
+      return {
+        targetWeight: hasHistory ? entry.targetWeight : null,
+        targetReps: hasHistory ? entry.targetReps : null,
+        repMin: cfg.repMin, repMax: cfg.repMax, mode: 'amrap', isNew: !hasHistory
+      };
     }
-    return { targetWeight: null, targetReps: cfg.repMin, repMin: cfg.repMin, repMax: cfg.repMax, isNew: true };
+    if (hasHistory) {
+      return { targetWeight: entry.targetWeight, targetReps: entry.targetReps, repMin: cfg.repMin, repMax: cfg.repMax, mode: mode, isNew: false };
+    }
+    return { targetWeight: null, targetReps: cfg.repMin, repMin: cfg.repMin, repMax: cfg.repMax, mode: mode, isNew: true };
   }
 
   function renderWorkoutScreen(){
@@ -1358,7 +1419,12 @@
 
       var block = document.createElement('div');
       block.className = 'exercise-block';
-      var rangesStr = progEx.sets.map(function(c){ return c.repMin + '\u2013' + c.repMax; }).join(' · ');
+      var rangesStr = progEx.sets.map(function(c){
+        var m = c.mode || 'range';
+        if (m === 'amrap') return 'AMRAP';
+        if (m === 'straight') return String(c.repMin);
+        return c.repMin + '\u2013' + c.repMax;
+      }).join(' · ');
       var noHistory = !state.progression[progEx.id];
       var targetLine = progEx.sets.length + ' sets planned · ' + rangesStr + ' reps' +
         (noHistory ? '<br>First session — log your own working weight for each set.' : '');
@@ -1437,10 +1503,21 @@
     var prefillWeight = (slot.targetWeight !== null && slot.targetWeight !== undefined) ? slot.targetWeight : (lastSet ? lastSet.weight : null);
     var prefillReps = slot.targetReps;
 
+    var hintText;
+    if (slot.mode === 'amrap') {
+      hintText = (slot.targetReps !== null && slot.targetReps !== undefined)
+        ? 'Set ' + setIdx + ': AMRAP — beat last time\u2019s ' + slot.targetReps + ' reps'
+        : 'Set ' + setIdx + ': AMRAP — as many reps as possible';
+      prefillReps = '';
+    } else if (slot.mode === 'straight') {
+      hintText = 'Set ' + setIdx + ' target: ' + slot.repMin + ' reps';
+    } else {
+      hintText = 'Set ' + setIdx + ' target: ' + slot.repMin + '\u2013' + slot.repMax + ' reps';
+    }
     var hint = document.createElement('div');
     hint.className = 'row-sub';
     hint.style.margin = '0 0 4px';
-    hint.textContent = 'Set ' + setIdx + ' target: ' + slot.repMin + '\u2013' + slot.repMax + ' reps';
+    hint.textContent = hintText;
     wrap.appendChild(hint);
 
     var row = document.createElement('div');
@@ -1534,8 +1611,12 @@
     return exCfg.sets.map(function(cfg, i){
       var set = loggedSets[i];
       var priorEntry = Array.isArray(prior) ? prior[i] : null;
+      var mode = cfg.mode || 'range';
       if (!set) {
-        return priorEntry || { targetWeight: null, targetReps: cfg.repMin };
+        return priorEntry || { targetWeight: null, targetReps: mode === 'amrap' ? null : cfg.repMin };
+      }
+      if (mode === 'amrap') {
+        return { targetWeight: set.weight, targetReps: set.reps };
       }
       if (set.reps >= cfg.repMax) {
         return { targetWeight: set.weight + exCfg.weightIncrement, targetReps: cfg.repMin };
