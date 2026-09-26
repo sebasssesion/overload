@@ -242,6 +242,28 @@
   }
   .exercise-editor-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .exercise-editor-head .row-title { font-size: 14px; }
+  .exercise-suggest {
+    display: none;
+    position: absolute;
+    left: 0; right: 0; top: calc(100% + 2px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    z-index: 5;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .exercise-suggest.open { display: block; }
+  .exercise-suggest-item {
+    padding: 11px 13px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+  }
+  .exercise-suggest-item:last-child { border-bottom: none; }
+  .exercise-suggest-item:active { background: var(--surface-alt); }
   .set-range-list { margin-bottom: 2px; }
   .set-range-row { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--surface); }
   .set-range-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -778,6 +800,20 @@
     if (!template) return null;
     return template.exercises.find(function(e){ return e.id === exId; });
   }
+  function getExerciseLibrary(){
+    var map = {};
+    state.programs.forEach(function(p){
+      p.dayTemplates.forEach(function(day){
+        day.exercises.forEach(function(e){ map[e.id] = e; });
+      });
+    });
+    if (typeof editingProgram !== 'undefined' && editingProgram) {
+      editingProgram.dayTemplates.forEach(function(day){
+        day.exercises.forEach(function(e){ if (e.name.trim()) map[e.id] = e; });
+      });
+    }
+    return Object.keys(map).map(function(id){ return map[id]; });
+  }
   function todayKey(){
     var d = new Date().getDay();
     var w = WEEKDAYS.find(function(x){ return x.jsDay === d; });
@@ -1149,12 +1185,48 @@
     box.innerHTML =
       '<div class="exercise-editor-head"><span class="row-title">Exercise ' + (eIdx+1) + '</span>' +
       '<button class="btn-ghost" style="color:var(--danger);" data-remove-ex>Remove</button></div>' +
-      '<div class="field"><label class="field-label">Name</label>' +
-      '<input type="text" data-f="name" value="' + escapeHtml(ex.name) + '" placeholder="e.g. Incline Bench Press"></div>' +
+      '<div class="field" style="position:relative;"><label class="field-label">Name</label>' +
+      '<input type="text" data-f="name" autocomplete="off" value="' + escapeHtml(ex.name) + '" placeholder="e.g. Incline Bench Press">' +
+      '<div class="exercise-suggest" data-suggest></div></div>' +
       '<div class="field" style="margin-bottom:12px;"><label class="field-label">Weight step (' + unit() + ')</label>' +
       '<input type="number" step="0.5" min="0" data-f="weightIncrement" value="' + ex.weightIncrement + '"></div>' +
       '<label class="field-label">Sets & rep ranges</label>' +
       '<div class="set-range-list" data-setlist></div>';
+
+    var nameInput = box.querySelector('input[data-f="name"]');
+    var suggestBox = box.querySelector('[data-suggest]');
+
+    function hideSuggestions(){ suggestBox.innerHTML = ''; suggestBox.classList.remove('open'); }
+    function showSuggestions(){
+      var q = nameInput.value.trim().toLowerCase();
+      if (q.length < 2) { hideSuggestions(); return; }
+      var matches = getExerciseLibrary().filter(function(e){
+        if (e.id === ex.id) return false;
+        if (day.exercises.some(function(other){ return other !== ex && other.id === e.id; })) return false;
+        return e.name.toLowerCase().indexOf(q) !== -1;
+      }).slice(0, 6);
+      if (!matches.length) { hideSuggestions(); return; }
+      suggestBox.innerHTML = '';
+      matches.forEach(function(m){
+        var item = document.createElement('div');
+        item.className = 'exercise-suggest-item';
+        item.textContent = m.name;
+        item.addEventListener('mousedown', function(e){ e.preventDefault(); }); // keep focus so blur doesn't fire first
+        item.addEventListener('click', function(){
+          ex.id = m.id;
+          ex.name = m.name;
+          ex.weightIncrement = m.weightIncrement;
+          ex.sets = JSON.parse(JSON.stringify(m.sets));
+          hideSuggestions();
+          renderDayTemplates();
+        });
+        suggestBox.appendChild(item);
+      });
+      suggestBox.classList.add('open');
+    }
+    nameInput.addEventListener('input', showSuggestions);
+    nameInput.addEventListener('focus', showSuggestions);
+    nameInput.addEventListener('blur', function(){ setTimeout(hideSuggestions, 100); });
 
     box.querySelectorAll('input[data-f]').forEach(function(inp){
       inp.addEventListener('input', function(){
