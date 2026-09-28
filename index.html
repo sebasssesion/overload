@@ -301,6 +301,8 @@
     padding: 0;
   }
   .day-collapse-toggle svg { width: 16px; height: 16px; transition: transform 0.15s ease; }
+  .exercise-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+  .exercise-head-left .row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .program-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -1182,16 +1184,45 @@
   function buildExerciseEditorRow(day, ex, eIdx){
     var box = document.createElement('div');
     box.className = 'exercise-editor';
-    box.innerHTML =
-      '<div class="exercise-editor-head"><span class="row-title">Exercise ' + (eIdx+1) + '</span>' +
-      '<button class="btn-ghost" style="color:var(--danger);" data-remove-ex>Remove</button></div>' +
-      '<div class="field" style="position:relative;"><label class="field-label">Name</label>' +
-      '<input type="text" data-f="name" autocomplete="off" value="' + escapeHtml(ex.name) + '" placeholder="e.g. Incline Bench Press">' +
-      '<div class="exercise-suggest" data-suggest></div></div>' +
-      '<div class="field" style="margin-bottom:12px;"><label class="field-label">Weight step (' + unit() + ')</label>' +
-      '<input type="number" step="0.5" min="0" data-f="weightIncrement" value="' + ex.weightIncrement + '"></div>' +
-      '<label class="field-label">Sets & rep ranges</label>' +
-      '<div class="set-range-list" data-setlist></div>';
+    var collapsed = !!ex._collapsed;
+    var titleText = (ex.name && ex.name.trim()) ? ex.name.trim() : ('Exercise ' + (eIdx+1));
+    var chevron = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(' + (collapsed ? '-90deg' : '0deg') + ');"><path d="M6 9l6 6 6-6"/></svg>';
+    var headHtml =
+      '<div class="exercise-editor-head" style="' + (collapsed ? 'margin-bottom:6px;' : '') + '">' +
+      '<div class="exercise-head-left"><button class="day-collapse-toggle" data-toggle-ex aria-label="' + (collapsed ? 'Expand exercise' : 'Collapse exercise') + '">' + chevron + '</button>' +
+      '<span class="row-title">' + escapeHtml(titleText) + '</span></div>' +
+      '<button class="btn-ghost" style="color:var(--danger);" data-remove-ex>Remove</button></div>';
+    var bodyHtml;
+    if (collapsed) {
+      var sumStr = ex.sets.map(function(c){
+        var m = c.mode || 'range';
+        if (m === 'amrap') return 'AMRAP';
+        if (m === 'straight') return String(c.repMin);
+        return c.repMin + '\u2013' + c.repMax;
+      }).join(' · ');
+      bodyHtml = '<div class="row-sub" style="margin:0;">' + ex.sets.length + ' set' + (ex.sets.length === 1 ? '' : 's') + ' · ' + sumStr + '</div>';
+    } else {
+      bodyHtml =
+        '<div class="field" style="position:relative;"><label class="field-label">Name</label>' +
+        '<input type="text" data-f="name" autocomplete="off" value="' + escapeHtml(ex.name) + '" placeholder="e.g. Incline Bench Press">' +
+        '<div class="exercise-suggest" data-suggest></div></div>' +
+        '<div class="field" style="margin-bottom:12px;"><label class="field-label">Weight step (' + unit() + ')</label>' +
+        '<input type="number" step="0.5" min="0" data-f="weightIncrement" value="' + ex.weightIncrement + '"></div>' +
+        '<label class="field-label">Sets & rep ranges</label>' +
+        '<div class="set-range-list" data-setlist></div>';
+    }
+    box.innerHTML = headHtml + bodyHtml;
+
+    box.querySelector('[data-toggle-ex]').addEventListener('click', function(){
+      ex._collapsed = !collapsed;
+      renderDayTemplates();
+    });
+    box.querySelector('[data-remove-ex]').addEventListener('click', function(){
+      var idx = day.exercises.indexOf(ex);
+      if (idx > -1) day.exercises.splice(idx, 1);
+      renderDayTemplates();
+    });
+    if (collapsed) return box;
 
     var nameInput = box.querySelector('input[data-f="name"]');
     var suggestBox = box.querySelector('[data-suggest]');
@@ -1235,12 +1266,6 @@
         ex[f] = (inp.type === 'number' && isNaN(val)) ? 0 : val;
       });
     });
-    box.querySelector('[data-remove-ex]').addEventListener('click', function(){
-      var idx = day.exercises.indexOf(ex);
-      if (idx > -1) day.exercises.splice(idx, 1);
-      renderDayTemplates();
-    });
-
     var setListEl = box.querySelector('[data-setlist]');
     function renderSetRangeRows(){
       setListEl.innerHTML = '';
@@ -1373,7 +1398,7 @@
     var name = document.getElementById('programNameInput').value.trim();
     if (!name) { toast('Give your program a name'); return; }
     var cleanedDays = editingProgram.dayTemplates
-      .map(function(d){ return { id: d.id, name: d.name.trim(), exercises: d.exercises.filter(function(e){ return e.name.trim().length && e.sets && e.sets.length; }) }; })
+      .map(function(d){ return { id: d.id, name: d.name.trim(), exercises: d.exercises.filter(function(e){ return e.name.trim().length && e.sets && e.sets.length; }).map(function(e){ var c = Object.assign({}, e); delete c._collapsed; return c; }) }; })
       .filter(function(d){ return d.name.length && d.exercises.length; });
     if (!cleanedDays.length) { toast('Add at least one training day with an exercise'); return; }
     var validIds = cleanedDays.map(function(d){ return d.id; });
