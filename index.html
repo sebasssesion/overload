@@ -790,6 +790,10 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(function(){ t.classList.remove('show'); }, 2200);
   }
+  function parseDecimal(str){
+    if (str === null || str === undefined) return NaN;
+    return parseFloat(String(str).trim().replace(',', '.'));
+  }
   function escapeHtml(s){
     var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML;
   }
@@ -1207,7 +1211,7 @@
         '<input type="text" data-f="name" autocomplete="off" value="' + escapeHtml(ex.name) + '" placeholder="e.g. Incline Bench Press">' +
         '<div class="exercise-suggest" data-suggest></div></div>' +
         '<div class="field" style="margin-bottom:12px;"><label class="field-label">Weight step (' + unit() + ')</label>' +
-        '<input type="number" step="0.5" min="0" data-f="weightIncrement" value="' + ex.weightIncrement + '"></div>' +
+        '<input type="text" inputmode="decimal" data-f="weightIncrement" value="' + ex.weightIncrement + '"></div>' +
         '<label class="field-label">Sets & rep ranges</label>' +
         '<div class="set-range-list" data-setlist></div>';
     }
@@ -1262,6 +1266,11 @@
     box.querySelectorAll('input[data-f]').forEach(function(inp){
       inp.addEventListener('input', function(){
         var f = inp.dataset.f;
+        if (f === 'weightIncrement') {
+          var dv = parseDecimal(inp.value);
+          ex[f] = isNaN(dv) ? 0 : dv;
+          return;
+        }
         var val = inp.type === 'number' ? parseFloat(inp.value) : inp.value;
         ex[f] = (inp.type === 'number' && isNaN(val)) ? 0 : val;
       });
@@ -1595,9 +1604,27 @@
     }
 
     var setIdx = sessEx.loggedSets.length + 1;
-    var slot = getTargetForSet(progEx, sessEx.loggedSets.length);
+    var slotIndex = sessEx.loggedSets.length;
+    var slot = getTargetForSet(progEx, slotIndex);
     var lastSet = sessEx.loggedSets[sessEx.loggedSets.length - 1];
-    var prefillWeight = (slot.targetWeight !== null && slot.targetWeight !== undefined) ? slot.targetWeight : (lastSet ? lastSet.weight : null);
+    var prefillWeight;
+    if (slot.targetWeight !== null && slot.targetWeight !== undefined) {
+      // Real history for this exact set slot — trust it.
+      prefillWeight = slot.targetWeight;
+    } else if (lastSet) {
+      // No history for this slot yet. Default to the previous set's weight,
+      // unless this set's own rep range calls for more reps than the
+      // previous set's (the RPT/drop-set signal) — then suggest one weight
+      // step lighter instead of blindly repeating the same weight.
+      var prevCfg = (slotIndex > 0 && progEx.sets[slotIndex - 1]) ? progEx.sets[slotIndex - 1] : null;
+      if (slot.mode !== 'amrap' && prevCfg && slot.repMin > prevCfg.repMin) {
+        prefillWeight = Math.max(0, lastSet.weight - progEx.weightIncrement);
+      } else {
+        prefillWeight = lastSet.weight;
+      }
+    } else {
+      prefillWeight = null;
+    }
     var prefillReps = slot.targetReps;
 
     var hintText;
@@ -1621,13 +1648,13 @@
     row.className = 'set-row';
     row.innerHTML =
       '<div class="set-num">' + setIdx + '</div>' +
-      '<input type="number" step="0.5" inputmode="decimal" class="w-input" placeholder="' + unit() + '" value="' + (prefillWeight === null || prefillWeight === undefined ? '' : prefillWeight) + '">' +
+      '<input type="text" inputmode="decimal" class="w-input" placeholder="' + unit() + '" value="' + (prefillWeight === null || prefillWeight === undefined ? '' : prefillWeight) + '">' +
       '<input type="number" inputmode="numeric" class="r-input" placeholder="reps" value="' + prefillReps + '">' +
       '<button class="log-btn">Log</button>';
     wrap.appendChild(row);
 
     row.querySelector('.log-btn').addEventListener('click', function(){
-      var w = parseFloat(row.querySelector('.w-input').value);
+      var w = parseDecimal(row.querySelector('.w-input').value);
       var r = parseInt(row.querySelector('.r-input').value, 10);
       if (isNaN(w) || isNaN(r) || w < 0 || r <= 0) { toast('Enter a weight and reps'); return; }
       var prResult = checkAndRecordPR(sessEx.exerciseId, w, r);
