@@ -1461,10 +1461,13 @@
     showScreen('workout');
   }
 
-  function getTargetForSet(ex, index){
+  function progressionKey(exerciseId, dayTemplateId){
+    return exerciseId + '::' + (dayTemplateId || '');
+  }
+  function getTargetForSet(ex, index, dayTemplateId){
     var cfg = (ex.sets && (ex.sets[index] || ex.sets[ex.sets.length - 1])) || { repMin: 8, repMax: 12, mode: 'range' };
     var mode = cfg.mode || 'range';
-    var prog = state.progression[ex.id];
+    var prog = state.progression[progressionKey(ex.id, dayTemplateId)];
     var entry = Array.isArray(prog) ? prog[index] : null;
     var hasHistory = entry && entry.targetWeight !== null && entry.targetWeight !== undefined;
     if (mode === 'amrap') {
@@ -1531,7 +1534,7 @@
         if (m === 'straight') return String(c.repMin);
         return c.repMin + '\u2013' + c.repMax;
       }).join(' · ');
-      var noHistory = !state.progression[progEx.id];
+      var noHistory = !state.progression[progressionKey(progEx.id, session.dayTemplateId)];
       var targetLine = progEx.sets.length + ' sets planned · ' + rangesStr + ' reps' +
         (noHistory ? '<br>First session — log your own working weight for each set.' : '');
       block.innerHTML = '<h3>' + escapeHtml(progEx.name) + '</h3>' +
@@ -1605,7 +1608,7 @@
 
     var setIdx = sessEx.loggedSets.length + 1;
     var slotIndex = sessEx.loggedSets.length;
-    var slot = getTargetForSet(progEx, slotIndex);
+    var slot = getTargetForSet(progEx, slotIndex, state.activeSession.dayTemplateId);
     var lastSet = sessEx.loggedSets[sessEx.loggedSets.length - 1];
     var prefillWeight;
     if (slot.targetWeight !== null && slot.targetWeight !== undefined) {
@@ -1703,7 +1706,7 @@
         else if (set.isStrengthPR) prNotes.push(sessEx.name + ' — rep PR: ' + fmtWeightUnit(set.weight) + ' × ' + set.reps);
       });
       if (exCfg && sessEx.loggedSets.length) {
-        state.progression[sessEx.exerciseId] = computeNextProgression(exCfg, sessEx.loggedSets);
+        state.progression[progressionKey(sessEx.exerciseId, session.dayTemplateId)] = computeNextProgression(exCfg, sessEx.loggedSets, session.dayTemplateId);
       }
     });
 
@@ -1730,8 +1733,8 @@
     renderHome();
   }
 
-  function computeNextProgression(exCfg, loggedSets){
-    var prior = state.progression[exCfg.id];
+  function computeNextProgression(exCfg, loggedSets, dayTemplateId){
+    var prior = state.progression[progressionKey(exCfg.id, dayTemplateId)];
     return exCfg.sets.map(function(cfg, i){
       var set = loggedSets[i];
       var priorEntry = Array.isArray(prior) ? prior[i] : null;
