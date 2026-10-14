@@ -408,6 +408,11 @@
     margin: 0 0 2px;
   }
   .target-line { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; }
+  .exercise-block-head { display: flex; align-items: flex-start; gap: 10px; }
+  .exercise-block-head .day-collapse-toggle { margin-top: 1px; }
+  .exercise-block-title { flex: 1; min-width: 0; }
+  .exercise-block.collapsed { padding: 12px 16px; }
+  .exercise-block.collapsed .target-line { margin-bottom: 0; margin-top: 2px; }
   .target-line b { color: var(--text); font-weight: 600; }
 
   .set-row {
@@ -1537,21 +1542,66 @@
       var noHistory = !state.progression[progressionKey(progEx.id, session.dayTemplateId)];
       var targetLine = progEx.sets.length + ' sets planned · ' + rangesStr + ' reps' +
         (noHistory ? '<br>First session — log your own working weight for each set.' : '');
-      block.innerHTML = '<h3>' + escapeHtml(progEx.name) + '</h3>' +
-        '<div class="target-line">' + targetLine + '</div>';
 
-      var setsWrap = document.createElement('div');
-      setsWrap.id = 'sets-' + sessEx.exerciseId;
-      block.appendChild(setsWrap);
-      renderSetsForExercise(sessEx, progEx, setsWrap);
+      // Collapsed automatically once every planned set is logged; the chevron
+      // lets you override that either way. Logging the final planned set
+      // clears any manual override so it folds away on its own.
+      function isCollapsed(){
+        if (sessEx._collapsedOverride !== undefined) return sessEx._collapsedOverride;
+        return sessEx.loggedSets.length >= progEx.sets.length;
+      }
+      function buildBlock(){
+        block.innerHTML = '';
+        var collapsed = isCollapsed();
+        block.classList.toggle('collapsed', collapsed);
 
-      var addSetLink = document.createElement('button');
-      addSetLink.className = 'add-set-link';
-      addSetLink.textContent = '+ Add set';
-      addSetLink.addEventListener('click', function(){
-        renderSetsForExercise(sessEx, progEx, setsWrap, true);
-      });
-      block.appendChild(addSetLink);
+        var head = document.createElement('div');
+        head.className = 'exercise-block-head';
+        var toggleBtn = document.createElement('button');
+        toggleBtn.className = 'day-collapse-toggle';
+        toggleBtn.setAttribute('aria-label', collapsed ? 'Expand exercise' : 'Collapse exercise');
+        toggleBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(' + (collapsed ? '-90deg' : '0deg') + ');"><path d="M6 9l6 6 6-6"/></svg>';
+        toggleBtn.addEventListener('click', function(){
+          sessEx._collapsedOverride = !collapsed;
+          save();
+          buildBlock();
+        });
+        var titleWrap = document.createElement('div');
+        titleWrap.className = 'exercise-block-title';
+        var h3 = document.createElement('h3');
+        h3.textContent = progEx.name;
+        titleWrap.appendChild(h3);
+        var sub = document.createElement('div');
+        sub.className = 'target-line';
+        if (collapsed) {
+          var anyPR = sessEx.loggedSets.some(function(st){ return st.isWeightPR || st.isStrengthPR; });
+          var doneStr = sessEx.loggedSets.map(function(st){ return fmtWeight(st.weight) + '\u00d7' + st.reps; }).join(' · ');
+          sub.textContent = (sessEx.loggedSets.length >= progEx.sets.length ? '\u2713 ' : '') +
+            sessEx.loggedSets.length + ' set' + (sessEx.loggedSets.length === 1 ? '' : 's') +
+            ' · ' + doneStr + ' ' + unit() + (anyPR ? ' · PR' : '');
+        } else {
+          sub.innerHTML = targetLine;
+        }
+        titleWrap.appendChild(sub);
+        head.appendChild(toggleBtn);
+        head.appendChild(titleWrap);
+        block.appendChild(head);
+        if (collapsed) return;
+
+        var setsWrap = document.createElement('div');
+        setsWrap.id = 'sets-' + sessEx.exerciseId;
+        block.appendChild(setsWrap);
+        renderSetsForExercise(sessEx, progEx, setsWrap, false, buildBlock);
+
+        var addSetLink = document.createElement('button');
+        addSetLink.className = 'add-set-link';
+        addSetLink.textContent = '+ Add set';
+        addSetLink.addEventListener('click', function(){
+          renderSetsForExercise(sessEx, progEx, setsWrap, true, buildBlock);
+        });
+        block.appendChild(addSetLink);
+      }
+      buildBlock();
 
       area.appendChild(block);
     });
@@ -1578,7 +1628,7 @@
     el.textContent = m + ':' + (s<10?'0':'') + s;
   }
 
-  function renderSetsForExercise(sessEx, progEx, wrap, forceExtraRow){
+  function renderSetsForExercise(sessEx, progEx, wrap, forceExtraRow, onChange){
     wrap.innerHTML = '';
     sessEx.loggedSets.forEach(function(set, i){
       var chip = document.createElement('div');
@@ -1596,7 +1646,7 @@
       undo.addEventListener('click', function(){
         sessEx.loggedSets.splice(i,1);
         save();
-        renderSetsForExercise(sessEx, progEx, wrap);
+        if (onChange) onChange(); else renderSetsForExercise(sessEx, progEx, wrap);
       });
       chip.appendChild(undo);
       wrap.appendChild(chip);
@@ -1665,7 +1715,9 @@
       save();
       if (prResult.isWeightPR) toast('\ud83d\udd25 New PR — heaviest ' + getExNameById(sessEx.exerciseId) + ' ever');
       else if (prResult.isStrengthPR) toast('\ud83d\udd25 Rep PR on ' + getExNameById(sessEx.exerciseId));
-      renderSetsForExercise(sessEx, progEx, wrap);
+      if (sessEx.loggedSets.length === progEx.sets.length) sessEx._collapsedOverride = undefined;
+      save();
+      if (onChange) onChange(); else renderSetsForExercise(sessEx, progEx, wrap);
     });
   }
 
