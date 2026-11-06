@@ -303,6 +303,10 @@
   .day-collapse-toggle svg { width: 16px; height: 16px; transition: transform 0.15s ease; }
   .exercise-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
   .exercise-head-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .icon-action { width: 34px; height: 34px; padding: 0; border: none; background: none; border-radius: 8px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .icon-action svg { width: 19px; height: 19px; }
+  .icon-action.danger { color: var(--danger); }
+  .icon-action:active { background: var(--surface); }
   .swap-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
   .swap-actions { display: flex; gap: 8px; margin-top: 8px; }
   .exercise-head-left .row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1204,8 +1208,11 @@
       '<div class="exercise-head-left"><button class="day-collapse-toggle" data-toggle-ex aria-label="' + (collapsed ? 'Expand exercise' : 'Collapse exercise') + '">' + chevron + '</button>' +
       '<span class="row-title">' + escapeHtml(titleText) + '</span></div>' +
       '<div class="exercise-head-actions">' +
-      '<button class="btn-ghost" style="color:var(--accent);" data-swap-ex>Swap</button>' +
-      '<button class="btn-ghost" style="color:var(--danger);" data-remove-ex>Delete</button></div></div>';
+      '<button class="icon-action" data-swap-ex aria-label="Swap exercise" title="Swap exercise">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h13"/><path d="M16 3l4 4-4 4"/><path d="M17 17H4"/><path d="M8 13l-4 4 4 4"/></svg></button>' +
+      '<button class="icon-action danger" data-remove-ex aria-label="Delete exercise" title="Delete exercise">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>' +
+      '</div></div>';
     var bodyHtml;
     if (collapsed) {
       var sumStr = ex.sets.map(function(c){
