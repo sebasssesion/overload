@@ -302,6 +302,9 @@
   }
   .day-collapse-toggle svg { width: 16px; height: 16px; transition: transform 0.15s ease; }
   .exercise-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+  .exercise-head-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .swap-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+  .swap-actions { display: flex; gap: 8px; margin-top: 8px; }
   .exercise-head-left .row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .program-row {
@@ -1200,7 +1203,9 @@
       '<div class="exercise-editor-head" style="' + (collapsed ? 'margin-bottom:6px;' : '') + '">' +
       '<div class="exercise-head-left"><button class="day-collapse-toggle" data-toggle-ex aria-label="' + (collapsed ? 'Expand exercise' : 'Collapse exercise') + '">' + chevron + '</button>' +
       '<span class="row-title">' + escapeHtml(titleText) + '</span></div>' +
-      '<button class="btn-ghost" style="color:var(--danger);" data-remove-ex>Remove</button></div>';
+      '<div class="exercise-head-actions">' +
+      '<button class="btn-ghost" style="color:var(--accent);" data-swap-ex>Swap</button>' +
+      '<button class="btn-ghost" style="color:var(--danger);" data-remove-ex>Delete</button></div></div>';
     var bodyHtml;
     if (collapsed) {
       var sumStr = ex.sets.map(function(c){
@@ -1231,6 +1236,77 @@
       if (idx > -1) day.exercises.splice(idx, 1);
       renderDayTemplates();
     });
+    box.querySelector('[data-swap-ex]').addEventListener('click', function(){
+      ex._swapping = !ex._swapping;
+      renderDayTemplates();
+    });
+
+    if (ex._swapping) {
+      // Swap keeps this slot's sets / rep ranges / weight step and replaces
+      // only the movement. A brand-new name gets a fresh identity (so it
+      // starts with no inherited progression or PRs); picking an existing
+      // exercise links to it so its PR history carries over.
+      var swapPanel = document.createElement('div');
+      swapPanel.className = 'swap-panel';
+      swapPanel.innerHTML =
+        '<label class="field-label">Swap ' + escapeHtml(titleText) + ' with</label>' +
+        '<div style="position:relative;">' +
+        '<input type="text" class="swap-input" autocomplete="off" placeholder="e.g. Flat Bench Press">' +
+        '<div class="exercise-suggest" data-swap-suggest></div></div>' +
+        '<div class="swap-actions">' +
+        '<button class="btn btn-primary btn-sm" data-swap-confirm>Swap</button>' +
+        '<button class="btn btn-secondary btn-sm" data-swap-cancel>Cancel</button></div>' +
+        '<div class="row-sub" style="margin-top:8px;">Keeps this slot\u2019s sets and rep ranges. A new exercise starts with no weight history.</div>';
+      box.insertBefore(swapPanel, box.children[1]);
+
+      var swapInput = swapPanel.querySelector('.swap-input');
+      var swapSuggest = swapPanel.querySelector('[data-swap-suggest]');
+      function swapCandidates(){
+        return getExerciseLibrary().filter(function(e){
+          if (e.id === ex.id) return false;
+          return !day.exercises.some(function(other){ return other !== ex && other.id === e.id; });
+        });
+      }
+      function hideSwapSuggest(){ swapSuggest.innerHTML = ''; swapSuggest.classList.remove('open'); }
+      function doSwap(newId, newName){
+        ex.id = newId;
+        ex.name = newName;
+        ex._swapping = false;
+        renderDayTemplates();
+      }
+      function showSwapSuggest(){
+        var q = swapInput.value.trim().toLowerCase();
+        if (q.length < 2) { hideSwapSuggest(); return; }
+        var matches = swapCandidates().filter(function(e){ return e.name.toLowerCase().indexOf(q) !== -1; }).slice(0, 6);
+        if (!matches.length) { hideSwapSuggest(); return; }
+        swapSuggest.innerHTML = '';
+        matches.forEach(function(m){
+          var item = document.createElement('div');
+          item.className = 'exercise-suggest-item';
+          item.textContent = m.name;
+          item.addEventListener('mousedown', function(e){ e.preventDefault(); });
+          item.addEventListener('click', function(){ doSwap(m.id, m.name); });
+          swapSuggest.appendChild(item);
+        });
+        swapSuggest.classList.add('open');
+      }
+      function confirmSwap(){
+        var typed = swapInput.value.trim();
+        if (!typed) { toast('Type the new exercise name'); return; }
+        var exact = swapCandidates().filter(function(e){ return e.name.trim().toLowerCase() === typed.toLowerCase(); })[0];
+        if (exact) { doSwap(exact.id, exact.name); toast('Linked to existing ' + exact.name); }
+        else { doSwap(uid(), typed); }
+      }
+      swapInput.addEventListener('input', showSwapSuggest);
+      swapInput.addEventListener('focus', showSwapSuggest);
+      swapInput.addEventListener('blur', function(){ setTimeout(hideSwapSuggest, 100); });
+      swapInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); confirmSwap(); } });
+      swapPanel.querySelector('[data-swap-confirm]').addEventListener('click', confirmSwap);
+      swapPanel.querySelector('[data-swap-cancel]').addEventListener('click', function(){
+        ex._swapping = false;
+        renderDayTemplates();
+      });
+    }
     if (collapsed) return box;
 
     var nameInput = box.querySelector('input[data-f="name"]');
@@ -1412,7 +1488,7 @@
     var name = document.getElementById('programNameInput').value.trim();
     if (!name) { toast('Give your program a name'); return; }
     var cleanedDays = editingProgram.dayTemplates
-      .map(function(d){ return { id: d.id, name: d.name.trim(), exercises: d.exercises.filter(function(e){ return e.name.trim().length && e.sets && e.sets.length; }).map(function(e){ var c = Object.assign({}, e); delete c._collapsed; return c; }) }; })
+      .map(function(d){ return { id: d.id, name: d.name.trim(), exercises: d.exercises.filter(function(e){ return e.name.trim().length && e.sets && e.sets.length; }).map(function(e){ var c = Object.assign({}, e); delete c._collapsed; delete c._swapping; return c; }) }; })
       .filter(function(d){ return d.name.length && d.exercises.length; });
     if (!cleanedDays.length) { toast('Add at least one training day with an exercise'); return; }
     var validIds = cleanedDays.map(function(d){ return d.id; });
